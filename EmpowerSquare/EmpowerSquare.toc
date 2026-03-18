@@ -1,0 +1,9 @@
+## Interface: 120001
+## Title: EmpowerSquare
+## Notes: Shows a solid square for the current empower stage. Includes size and position settings.
+## Author: OpenAI Codex
+## Version: 1.0.0
+## SavedVariables: EmpowerSquareDB
+
+EmpowerSquare.lua
+
