@@ -27,14 +27,10 @@ local COLOR_PALETTE = {
     {name = "White", rgba = {1.0, 1.0, 1.0, 1.0}},
 }
 
+local Logic = EmpowerSquareLogic
+
 local function clamp(value, minimum, maximum)
-    if value < minimum then
-        return minimum
-    end
-    if value > maximum then
-        return maximum
-    end
-    return value
+    return Logic.clamp(value, minimum, maximum)
 end
 
 local function copyDefaults(target, source)
@@ -113,43 +109,19 @@ end
 
 local function isColorIndexUsedByOtherStage(stage, colorIndex)
     local settings = db()
-    if not settings or type(settings.stageColorIndexes) ~= "table" then
+    if not settings then
         return false
     end
-
-    for index, usedColorIndex in ipairs(settings.stageColorIndexes) do
-        if index ~= stage and usedColorIndex == colorIndex then
-            return true
-        end
-    end
-
-    return false
+    return Logic.isColorIndexUsedByOtherStage(settings.stageColorIndexes, stage, colorIndex)
 end
 
 local function normalizeStageColorIndexes(settings)
-    local source = type(settings.stageColorIndexes) == "table" and settings.stageColorIndexes or DEFAULT_STAGE_COLOR_INDEXES
-    local normalized = {}
-    local used = {}
-
-    for stage = 1, #DEFAULT_STAGE_COLOR_INDEXES do
-        local requested = tonumber(source[stage]) or DEFAULT_STAGE_COLOR_INDEXES[stage]
-        requested = clamp(math.floor(requested + 0.5), 1, #COLOR_PALETTE)
-
-        if not used[requested] then
-            normalized[stage] = requested
-            used[requested] = true
-        else
-            for paletteIndex = 1, #COLOR_PALETTE do
-                if not used[paletteIndex] then
-                    normalized[stage] = paletteIndex
-                    used[paletteIndex] = true
-                    break
-                end
-            end
-        end
-    end
-
-    settings.stageColorIndexes = normalized
+    settings.stageColorIndexes = Logic.normalizeStageColorIndexes(
+        settings.stageColorIndexes,
+        #DEFAULT_STAGE_COLOR_INDEXES,
+        #COLOR_PALETTE,
+        DEFAULT_STAGE_COLOR_INDEXES
+    )
 end
 
 local function updateStageColorDropdowns()
@@ -189,27 +161,15 @@ local function getEmpowerTiming()
     return nil, nil
 end
 
-local function normalizeDurationMilliseconds(rawDuration)
-    if type(rawDuration) ~= "number" then
-        return 0
-    end
-
-    if rawDuration > 50 then
-        return rawDuration
-    end
-
-    return rawDuration * 1000
-end
-
 local function getStageDurationMilliseconds(durationValue)
     if type(durationValue) == "number" then
-        return normalizeDurationMilliseconds(durationValue)
+        return Logic.stageDurationMilliseconds(durationValue)
     end
 
     if durationValue and durationValue.GetTotalDuration then
         local ok, totalDuration = pcall(durationValue.GetTotalDuration, durationValue)
         if ok then
-            return normalizeDurationMilliseconds(totalDuration)
+            return Logic.normalizeDurationMilliseconds(totalDuration)
         end
     end
 
@@ -222,16 +182,13 @@ local function getCurrentEmpowerStage()
         return nil
     end
 
-    local elapsedMs = math.max(0, (GetTime() * 1000) - startTimeMs)
-    local totalMs = 0
+    local durationMsList = {}
     for index, durationValue in ipairs(durations) do
-        totalMs = totalMs + getStageDurationMilliseconds(durationValue)
-        if elapsedMs < totalMs then
-            return index
-        end
+        -- Values are milliseconds (>50), so pure Logic treats them as ms.
+        durationMsList[index] = getStageDurationMilliseconds(durationValue)
     end
 
-    return #durations
+    return Logic.getEmpowerStage(startTimeMs, durationMsList, GetTime() * 1000)
 end
 
 local function applyPosition()
